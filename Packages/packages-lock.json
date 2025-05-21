@@ -1,5 +1,19 @@
 {
   "dependencies": {
+    "com.rashad.minidi": {
+      "version": "https://github.com/mekewi/MiniDi.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "27270cf6f8faee37810e818baa77c26fe423b2f4"
+    },
+    "com.rashad.unityeventsmanager": {
+      "version": "https://github.com/mekewi/UnityEventsManager.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "7d4db2ea3d3642c25d4aff9b534788cef511f594"
+    },
     "com.unity.multiplayer.center": {
       "version": "1.0.0",
       "depth": 0,
