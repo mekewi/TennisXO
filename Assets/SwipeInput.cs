@@ -4,19 +4,21 @@ using UnityEngine.Events;
 
 public class SwipeInput : MonoBehaviour
 {
+
+
     public float minSwipeDistance = 50f; // Minimum pixels to qualify as swipe
     public float maxSwipeTime = 1f;      // Max duration to consider a swipe
+    public GameObject ball;      // Max duration to consider a swipe
+    public Transform target;      // Max duration to consider a swipe
 
     private Vector2 startTouchPos;
     private Vector3 ballStartPosition;
     private Vector3 endPosition;
     public LayerMask groundMask;
-    private float startTime;
-    Transform ball;
-    public Action<Vector2,Vector3, float> OnSwipe; // (direction, power)
+    public float startTime;
+    public Action<Vector3 /*directionToTarget*/, float /*swipeSpeed*/, float /*swipeDistance*/> OnSwipe;
     private void Awake()
     {
-        ball = GameObject.FindGameObjectWithTag("Ball").transform;
     }
     void Update()
     {
@@ -25,6 +27,7 @@ public class SwipeInput : MonoBehaviour
         {
             startTouchPos = Input.mousePosition;
             startTime = Time.time;
+            Debug.Log("Mouse Down > "+ startTime);
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
 
@@ -34,7 +37,17 @@ public class SwipeInput : MonoBehaviour
             }
             //ballStartPosition = new Vector3(ball.position.x, 0, ball.position.z);
         }
+        if (Input.GetMouseButton(0))
+        {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
 
+            if (Physics.Raycast(ray, out hit, 100, groundMask))
+            {
+                endPosition = new Vector3(hit.point.x, 0, hit.point.z);
+            }
+            //target.position = transform.position + endPosition;
+        }
         if (Input.GetMouseButtonUp(0))
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -46,6 +59,7 @@ public class SwipeInput : MonoBehaviour
             }
             Vector2 endTouchPos = Input.mousePosition;
             float swipeTime = Time.time - startTime;
+            Debug.Log("Mouse Up > "+ Time.time);
             HandleSwipe(endTouchPos, swipeTime);
         }
 #else
@@ -69,15 +83,18 @@ public class SwipeInput : MonoBehaviour
 
     private void HandleSwipe(Vector2 endTouchPos, float swipeTime)
     {
+
         Vector2 swipeDelta = endTouchPos - startTouchPos;
-        Vector3 directionOfHit = endPosition - ballStartPosition;
 
-        if (swipeDelta.magnitude < minSwipeDistance || swipeTime > maxSwipeTime)
+/*        if (swipeDelta.magnitude < minSwipeDistance || swipeTime > maxSwipeTime)
             return;
+*/
+        float swipeDistance = swipeDelta.magnitude;
+        float swipeSpeed = swipeDistance / swipeTime;
 
-        Vector2 direction = swipeDelta.normalized;
-        float power = swipeDelta.magnitude / swipeTime;
+        Vector3 directionToTarget = (endPosition - ballStartPosition).normalized;
+        var distance = (endPosition - ballStartPosition).magnitude;
+        OnSwipe?.Invoke(directionToTarget, swipeTime, distance);
 
-        OnSwipe?.Invoke(swipeDelta, directionOfHit, power);
     }
 }

@@ -1,5 +1,19 @@
-using System;
+﻿using System;
 using UnityEngine;
+
+public enum ShotControlMode
+{
+    UseFlightTime,
+    UseArcHeight
+}
+public enum SpinType
+{
+    None,
+    Topspin,
+    Backspin,
+    LeftSidespin,
+    RightSidespin
+}
 
 public class CustomTennisBallRigidbody : MonoBehaviour
 {
@@ -13,18 +27,20 @@ public class CustomTennisBallRigidbody : MonoBehaviour
     public float airDensity = 1.225f; // Standard air density (kg/m^3)
     public float ballRadius = 0.0335f; // Radius of a tennis ball (meters)
     public float spinMagnusCoefficient = 0.005f; // Controls the strength of the Magnus effect
+    public float speed = 0.75f; // Controls the strength of the Magnus effect
 
     private Vector3 velocity;
     private float angularVelocity; // Rotation speed (rad/s) - simplified for Magnus effect
     private Vector3 angularVelocityVector; // More accurate representation of rotation
-    private float currentDrag;
     private float currentSpin; // Used to influence angular velocity
 
     public event Action OnBounce;
     public event Action OnStop;
+    public SwipeInput swipeInput;
 
     private bool isMoving = false;
     private bool isGrounded = false;
+    private bool bounce = false;
     void Update()
     {
         if (!isMoving) return;
@@ -42,20 +58,85 @@ public class CustomTennisBallRigidbody : MonoBehaviour
         CheckStop();
     }
 
-    public void Launch(Vector3 direction, ShotData shot)
+    public void SetSpin(SpinType spinType, float spinAmount = 1f)
     {
-        Vector3 flatDirection = direction.normalized;
+        currentSpin = spinAmount;
 
-        velocity = flatDirection * shot.power;
-        velocity.y += shot.lift;
+        switch (spinType)
+        {
+            case SpinType.Topspin:
+                angularVelocityVector = transform.right * currentSpin * 100f;
+                break;
+            case SpinType.Backspin:
+                angularVelocityVector = -transform.right * currentSpin * 100f;
+                break;
+            case SpinType.LeftSidespin:
+                angularVelocityVector = -transform.up * currentSpin * 100f;
+                break;
+            case SpinType.RightSidespin:
+                angularVelocityVector = transform.up * currentSpin * 100f;
+                break;
+            default:
+                angularVelocityVector = Vector3.zero;
+                break;
+        }
 
-        currentSpin = shot.spin; // Use spin from ShotData to influence rotation
-        currentDrag = shot.drag; // You might want to combine this with calculated air drag
-        angularVelocity = currentSpin * 100f; // Example: Convert spin to angular velocity
-        angularVelocityVector = transform.right * currentSpin * 100f; // Example: Spin around the right axis for sidespin
+        // Optional: Also store magnitude for simplified rotation
+        angularVelocity = currentSpin * 100f;
+    }
+
+
+
+    public void ShootTo(
+    Vector3 startPos,
+    Vector3 targetPos,
+    ShotControlMode mode,
+    float value // either flightTime or arcHeight depending on mode
+)
+    {
+        Vector3 displacement = targetPos - startPos;
+        Vector3 displacementXZ = new Vector3(displacement.x, 0f, displacement.z);
+        float g = gravity;
+        float flightTime; // Declare flightTime here
+        float vy;
+        Vector3 velocityXZ;
+
+        if (mode == ShotControlMode.UseFlightTime)
+        {
+            flightTime = value;
+
+            // ✅ Preserve direction in X and Z
+            velocityXZ = new Vector3(
+                displacementXZ.x / flightTime,
+                0f,
+                displacementXZ.z / flightTime
+            );
+
+            vy = (targetPos.y - startPos.y + 0.5f * g * flightTime * flightTime) / flightTime;
+        }
+        else // UseArcHeight
+        {
+            float arcHeight = value;
+
+            float peakY = Mathf.Max(startPos.y, targetPos.y) + arcHeight;
+            float timeToPeak = Mathf.Sqrt(2f * (peakY - startPos.y) / g);
+            vy = g * timeToPeak;
+
+            float timeDown = Mathf.Sqrt(2f * (peakY - targetPos.y) / g);
+            flightTime = timeToPeak + timeDown; // Assign flightTime here
+
+            velocityXZ = new Vector3(
+                displacementXZ.x / flightTime,
+                0f,
+                displacementXZ.z / flightTime
+            );
+        }
+
+        velocity = velocityXZ + Vector3.up * vy;
 
         isMoving = true;
         isGrounded = false;
+
     }
 
     private void ApplyGravity(float deltaTime)
@@ -103,7 +184,11 @@ public class CustomTennisBallRigidbody : MonoBehaviour
                 velocity.y = 0f;
                 isGrounded = true;
             }
-
+            if (!bounce)
+            {
+                bounce = true;
+                Debug.Log("Bounce > " + (Time.time - swipeInput.startTime));
+            }
             OnBounce?.Invoke();
         }
         else if (transform.position.y <= ballRadius && velocity.y >= 0)
@@ -144,31 +229,16 @@ public class CustomTennisBallRigidbody : MonoBehaviour
         isMoving = false;
         isGrounded = false;
     }
-}
-
-public enum ShotType
-{
-    Serve,
-    Flat,
-    Topspin,
-    Slice,
-    Lob,
-    Volley
-}
-
-[Serializable]
-public class ShotData
-{
-    public float power;
-    public float lift;
-    public float spin; // Lateral curve force
-    public float drag; // Air resistance
-
-/*    public ShotData(float power, float lift, float spin, float drag)
+    void OnDrawGizmos()
     {
-        this.power = power;
-        this.lift = lift;
-        this.spin = spin;
-        this.drag = drag;
-    }*/
+        if (!Application.isPlaying || !isMoving) return;
+
+        Gizmos.color = Color.red;
+        Gizmos.DrawLine(transform.position, transform.position + velocity.normalized);
+
+        Gizmos.color = Color.blue;
+        Vector3 magnusDir = Vector3.Cross(angularVelocityVector, velocity).normalized;
+        Gizmos.DrawLine(transform.position, transform.position + magnusDir);
+    }
+    
 }

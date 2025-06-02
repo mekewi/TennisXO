@@ -219,15 +219,8 @@ public class SwipeLauncher : MonoBehaviour
         float lift = Mathf.Clamp01(verticalSwipeAmount + 0.5f) * serveLiftMultiplier * power / serveMaxPower;
         float spin = horizontalSwipeAmount * serveSpinMultiplier * power / serveMaxPower * 20f;
 
-        ShotData serveData = new ShotData
-        {
-            power = power,
-            lift = lift,
-            spin = spin,
-            drag = 0.01f
-        };
 
-        ballLauncher.Serve(serveDirection, serveData);
+
         Debug.Log($"Served with direction: {serveDirection}, power: {power:F2}, lift: {lift:F2}, spin: {spin:F2}");
     }
 
@@ -244,22 +237,6 @@ public class SwipeLauncher : MonoBehaviour
 
         float spin = Mathf.Clamp(horizontalSwipeAmount * spinMultiplier, -maxSpin, maxSpin);
 
-        if (verticalSwipeAmount > lobVerticalThreshold)
-        {
-            ballLauncher.Lob(launchDirection, power);
-        }
-        else if (verticalSwipeAmount > topspinVerticalThreshold)
-        {
-            ballLauncher.Topspin(launchDirection, power);
-        }
-        else if (Mathf.Abs(horizontalSwipeAmount) > 0.5f)
-        {
-            ballLauncher.Slice(launchDirection, power);
-        }
-        else
-        {
-            ballLauncher.FlatShot(launchDirection, power);
-        }
 
         Debug.Log($"Launched with direction: {launchDirection}, power: {power:F2}, spin: {spin:F2}");
     }

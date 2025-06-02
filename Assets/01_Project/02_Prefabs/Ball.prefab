@@ -97,6 +97,8 @@ GameObject:
   - component: {fileID: 8253334413199377354}
   - component: {fileID: 7617462752124210675}
   - component: {fileID: 5626515372831061071}
+  - component: {fileID: 645054908682882363}
+  - component: {fileID: 7641833200739842363}
   m_Layer: 0
   m_Name: Ball
   m_TagString: Ball
@@ -114,7 +116,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -0.2201, y: 3.757, z: 0.2738}
-  m_LocalScale: {x: 0.5000001, y: 0.5, z: 0.5000001}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 3769531575645555656}
@@ -137,7 +139,7 @@ SphereCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Radius: 0.1
   m_Center: {x: 0, y: 0, z: 0}
@@ -154,5 +156,56 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gravity: 9.81
-  bounceDamping: 0.6
+  bounceDamping: 1
   minBounceVelocity: 1
+  groundFriction: 0.8
+  dragCoefficient: 0.05
+  airDensity: 1.225
+  ballRadius: 0.0335
+  spinMagnusCoefficient: 0.005
+--- !u!114 &645054908682882363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4601604283864443287}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 116684df7ce69f7438afa96e7e0bb4b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ball: {fileID: 0}
+  mass: 0.058
+  radius: 0.033
+  airDensity: 1.225
+  customGravityMagnitude: 9.81
+  magnusCoefficient: 0.001
+  spinDecayRate: 0.99
+--- !u!54 &7641833200739842363
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4601604283864443287}
+  serializedVersion: 4
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 1
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
