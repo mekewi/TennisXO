@@ -1,100 +1,109 @@
 using System;
 using UnityEngine;
-using UnityEngine.Events;
+using UnityEngine.Events; // You're using this, but not in the code provided. Keep if needed elsewhere.
 
 public class SwipeInput : MonoBehaviour
 {
-
-
+    [Header("Swipe Detection Settings")]
     public float minSwipeDistance = 50f; // Minimum pixels to qualify as swipe
     public float maxSwipeTime = 1f;      // Max duration to consider a swipe
-    public GameObject ball;      // Max duration to consider a swipe
-    public Transform target;      // Max duration to consider a swipe
+    public float minNormalizedSwipeSpeed = 100f; // Minimum raw px/s for 0 strength
+    public float maxNormalizedSwipeSpeed = 1000f; // Maximum raw px/s for 1 strength
+
+    [Header("References")]
+    public LayerMask groundMask;
+
+    // These should ideally be set up in the Inspector as transforms or just passed directly to ShootTo
+    public Transform playerHitPosition; // The world position where the player 'hits' the ball (e.g., racket position)
+    public Transform courtTargetPosition; // The world position on the court the player is aiming for (e.g., target reticle)
+
 
     private Vector2 startTouchPos;
-    private Vector3 ballStartPosition;
-    private Vector3 endPosition;
-    public LayerMask groundMask;
     public float startTime;
-    public Action<Vector3 /*directionToTarget*/, float /*swipeSpeed*/, float /*swipeDistance*/> OnSwipe;
-    private void Awake()
+    private Vector3 initialBallWorldPosition; // World position where the ball starts its trajectory
+    private Vector3 finalTargetWorldPosition; // World position on the court where the player aimed
+
+    // The event to notify when a shot is ready to be fired with all calculated parameters
+    public Action<Vector3 /*startPos*/, Vector3 /*targetPos*/, float /*normalizedSwipeStrength*/> OnShotReady;
+
+
+    void Awake()
     {
+        if (playerHitPosition == null)
+            Debug.LogWarning("Player Hit Position Transform not set. Ball will start at (0,0,0) in world space.");
+        if (courtTargetPosition == null)
+            Debug.LogWarning("Court Target Position Transform not set. Target will be (0,0,0) in world space.");
     }
+
     void Update()
     {
 #if UNITY_EDITOR
+        HandleMouseInput();
+#else
+        HandleTouchInput();
+#endif
+    }
+
+    private void HandleMouseInput()
+    {
         if (Input.GetMouseButtonDown(0))
         {
-            startTouchPos = Input.mousePosition;
             startTime = Time.time;
-            Debug.Log("Mouse Down > "+ startTime);
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
-
             if (Physics.Raycast(ray, out hit, 100, groundMask))
             {
-                ballStartPosition = new Vector3(hit.point.x, 0, hit.point.z);
+                initialBallWorldPosition = new Vector3(hit.point.x, 0, hit.point.z); // Aim at the ground
             }
-            //ballStartPosition = new Vector3(ball.position.x, 0, ball.position.z);
         }
-        if (Input.GetMouseButton(0))
-        {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            RaycastHit hit;
 
-            if (Physics.Raycast(ray, out hit, 100, groundMask))
-            {
-                endPosition = new Vector3(hit.point.x, 0, hit.point.z);
-            }
-            //target.position = transform.position + endPosition;
-        }
         if (Input.GetMouseButtonUp(0))
         {
+            float swipeTime = Time.time - startTime;
+            Debug.Log("Mouse Up > " + Time.time);
+
+            // Re-evaluate final target position on mouse up for precision
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
-
-            if (Physics.Raycast(ray, out hit,100, groundMask))
+            if (Physics.Raycast(ray, out hit, 100, groundMask))
             {
-                endPosition = new Vector3(hit.point.x, 0, hit.point.z);
+                finalTargetWorldPosition = new Vector3(hit.point.x, 0, hit.point.z);
             }
-            Vector2 endTouchPos = Input.mousePosition;
-            float swipeTime = Time.time - startTime;
-            Debug.Log("Mouse Up > "+ Time.time);
-            HandleSwipe(endTouchPos, swipeTime);
+            // If no ground hit, use the one from MouseDown or a default fallback
+            // (consider making this more robust for off-court targeting)
+
+            ProcessSwipe(swipeTime);
         }
-#else
+    }
+
+    private void HandleTouchInput()
+    {
         if (Input.touchCount > 0)
         {
             Touch touch = Input.GetTouch(0);
-            
+
             if (touch.phase == TouchPhase.Began)
             {
                 startTouchPos = touch.position;
                 startTime = Time.time;
+
+                initialBallWorldPosition = playerHitPosition != null ? playerHitPosition.position : Vector3.zero;
+
+                // For touch, determining initial world target might be tricky.
+                // You might defer it to ProcessSwipe or use a fixed target,
+                // or raycast at the beginning of the swipe.
+                // For simplicity here, we'll use the final raycast on touch.ended.
             }
             else if (touch.phase == TouchPhase.Ended)
             {
                 float swipeTime = Time.time - startTime;
-                HandleSwipe(touch.position, swipeTime);
+                ProcessSwipe(swipeTime);
             }
         }
-#endif
     }
 
-    private void HandleSwipe(Vector2 endTouchPos, float swipeTime)
+    private void ProcessSwipe(float swipeTime)
     {
-
-        Vector2 swipeDelta = endTouchPos - startTouchPos;
-
-/*        if (swipeDelta.magnitude < minSwipeDistance || swipeTime > maxSwipeTime)
-            return;
-*/
-        float swipeDistance = swipeDelta.magnitude;
-        float swipeSpeed = swipeDistance / swipeTime;
-
-        Vector3 directionToTarget = (endPosition - ballStartPosition).normalized;
-        var distance = (endPosition - ballStartPosition).magnitude;
-        OnSwipe?.Invoke(directionToTarget, swipeTime, distance);
-
+        OnShotReady?.Invoke(initialBallWorldPosition, finalTargetWorldPosition, swipeTime);
     }
 }

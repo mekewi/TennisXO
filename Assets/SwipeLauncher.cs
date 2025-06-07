@@ -2,7 +2,6 @@ using UnityEngine;
 
 public class SwipeLauncher : MonoBehaviour
 {
-    public TennisBallLauncher ballLauncher;
     public Camera mainCamera; // Assign your main camera
 
     [Header("Serve Settings")]
@@ -35,17 +34,7 @@ public class SwipeLauncher : MonoBehaviour
 
     public void EnableServeMode(Vector3 servePosition)
     {
-        isServing = true;
-        if (ballLauncher != null)
-        {
-            ballLauncher.transform.position = servePosition;
-            ballLauncher.ResetBall();
-        }
-        else
-        {
-            Debug.LogError("Ball Launcher is null!");
-            isServing = false;
-        }
+
     }
 
     public void DisableServeMode()
@@ -196,7 +185,7 @@ public class SwipeLauncher : MonoBehaviour
     void ServeBall(Vector3 swipeDirectionWorld, float swipeTime, float swipeDistance)
     {
         //if (ballLauncher == null || ballLauncher.IsBallMoving()) return;
-        ballLauncher.SpawnBall();
+        //ballLauncher.SpawnBall();
 
         Vector3 normalizedSwipe = swipeDirectionWorld.normalized;
         Vector3 serveDirection = normalizedSwipe + serveDirectionOffset.normalized * 0.3f;
@@ -226,9 +215,9 @@ public class SwipeLauncher : MonoBehaviour
 
     void LaunchBall(Vector3 swipeDirectionWorld, float swipeTime, float swipeDistance)
     {
-        if (ballLauncher == null || ballLauncher.IsBallMoving()) return;
+/*        if (ballLauncher == null || ballLauncher.IsBallMoving()) return;
         ballLauncher.SpawnBall();
-
+*/
         Vector3 launchDirection = swipeDirectionWorld.normalized;
         float swipeSpeed = swipeDirectionWorld.magnitude / swipeTime;
         float power = Mathf.Clamp(swipeSpeed * powerMultiplier, 0f, maxPower);
