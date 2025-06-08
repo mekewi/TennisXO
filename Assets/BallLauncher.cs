@@ -27,7 +27,7 @@ public class BallLauncher : MonoBehaviour
     }
     private void HandleSwipe(Vector3 startPos,Vector3 endPos, float swipeSpeed)
     {
-        var ballRigidbody = Instantiate(ball).GetComponent<CustomTennisBallRigidbody>();
+        var ballRigidbody = Instantiate(ball).GetComponent<TennisBallLauncher>();
         var swipDeference = (endPos - startPos);
         ballRigidbody.transform.position = ball.transform.position;
         target.position = (new Vector3(0,0,0) + swipDeference.normalized) * swipDeference.magnitude;
@@ -48,7 +48,7 @@ public class BallLauncher : MonoBehaviour
         Debug.Log("IsBallWillHit Net > " + height);
         if (shotMode == ShotControlMode.UseFlightTime)
         {
-            speedKMHFlixable = speedKMH;
+            speedKMHFlixable = maxSpeed;
             do
             {
                 timeInKHM = distance / (speedKMHFlixable / 3.6f);

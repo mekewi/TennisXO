@@ -73,6 +73,27 @@ public class CustomTennisBallRigidbody : MonoBehaviour
             isGrounded = false; // It's no longer grounded if a force is applied
         }
     }
+    public void ApplySpin(SpinType spinType, float spinStrength = 50f)
+    {
+        switch (spinType)
+        {
+            case SpinType.Topspin:
+                angularVelocityVector = new Vector3(spinStrength, 0f, 0f);
+                break;
+            case SpinType.Backspin:
+                angularVelocityVector = new Vector3(-spinStrength, 0f, 0f);
+                break;
+            case SpinType.LeftSidespin:
+                angularVelocityVector = new Vector3(0f, -spinStrength, 0f);
+                break;
+            case SpinType.RightSidespin:
+                angularVelocityVector = new Vector3(0f, spinStrength, 0f);
+                break;
+            default:
+                angularVelocityVector = Vector3.zero;
+                break;
+        }
+    }
     public float GetHeightAtHorizontalPosition(Vector3 initialPosition, Vector3 initialVelocity, Vector3 targetXZPosition)
     {
         // Extract horizontal components for initial position and velocity
@@ -384,39 +405,47 @@ public class CustomTennisBallRigidbody : MonoBehaviour
 
     private void ApplyDrag(float deltaTime)
     {
+        // Quadratic air drag: Fd = 0.5 * ρ * Cd * A * v²
+        float radius = ballRadius;
+        float area = Mathf.PI * radius * radius;
         float speed = velocity.magnitude;
-        if (speed > 0)
-        {
-            float area = Mathf.PI * ballRadius * ballRadius;
-            Vector3 dragForce = 0.5f * dragCoefficient * airDensity * area * speed * speed * -velocity.normalized;
-            velocity += (dragForce / ballMass) * deltaTime; // Apply force divided by mass
-        }
+
+        Vector3 dragForce = 0.5f * airDensity * dragCoefficient * area * speed * velocity.normalized * -1;
+        Vector3 acceleration = dragForce / ballMass;
+        velocity += acceleration * deltaTime;
     }
     private void CheckGroundCollision()
     {
-        if (transform.position.y <= ballRadius && velocity.y < 0)
+        if (transform.position.y <= ballRadius && velocity.y < 0f)
         {
-            transform.position = new Vector3(transform.position.x, ballRadius, transform.position.z);
+            // Apply bounce on Y
             velocity.y *= -bounceDamping;
+
+            // Apply horizontal damping (friction)
             velocity.x *= groundFriction;
             velocity.z *= groundFriction;
 
-            // Reduce angular velocity on bounce
-            angularVelocityVector *= bounceDamping;
+            // Reduce angular velocity slightly (simulate spin energy loss)
+            angularVelocityVector *= 0.8f;
 
-            if (Mathf.Abs(velocity.y) < minBounceVelocity)
-            {
-                velocity.y = 0f;
-                isGrounded = true;
-            }
+            // Correct position to stay above ground
+            transform.position = new Vector3(transform.position.x, ballRadius, transform.position.z);
 
             if (!hasBounced)
             {
                 hasBounced = true;
-                Debug.Log("Bounce > " + (Time.time - swipeInput.startTime)); // Decouple if swipeInput isn't always available
                 OnBounce?.Invoke();
             }
+
+            // Stop ball if very slow
+            if (velocity.magnitude < minBounceVelocity)
+            {
+                velocity = Vector3.zero;
+                isMoving = false;
+                OnStop?.Invoke();
+            }
         }
+
         else if (transform.position.y <= ballRadius && velocity.y >= 0)
         {
             transform.position = new Vector3(transform.position.x, ballRadius, transform.position.z);
