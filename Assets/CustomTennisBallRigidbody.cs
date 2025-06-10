@@ -15,7 +15,7 @@ public enum SpinType
     RightSidespin
 }
 
-public class CustomTennisBallRigidbody : MonoBehaviour
+public class CustomTennisBallRigidbody : MonoBehaviour, ICustomTennisBallRigidbody
 {
     [Header("Physics Settings")]
     public float ballMass = 0.058f; // Standard tennis ball mass (kg)
@@ -33,7 +33,7 @@ public class CustomTennisBallRigidbody : MonoBehaviour
 
     public event Action OnBounce;
     public event Action OnStop;
-     public SwipeInput swipeInput; // Consider removing direct reference for better coupling
+    public SwipeInput swipeInput; // Consider removing direct reference for better coupling
 
     private bool isMoving = false;
     private bool isGrounded = false;
@@ -276,7 +276,7 @@ public class CustomTennisBallRigidbody : MonoBehaviour
         float value // either flightTime or arcHeight depending on mode
     )
     {
-        var calculatedVelocity = GetVelocity(startPos,targetPos,ShotControlMode.UseFlightTime,value);
+        var calculatedVelocity = GetVelocity(startPos, targetPos, ShotControlMode.UseFlightTime, value);
         var height = GetHeightAtSpecificZPosition(startPos, calculatedVelocity, 0);
         Debug.Log("GetHeightAtSpecificZPosition > " + height);
         return height;
@@ -348,6 +348,7 @@ public class CustomTennisBallRigidbody : MonoBehaviour
         Vector3 targetPos,
         ShotControlMode mode,
         float value // either flightTime or arcHeight depending on mode
+        , Vector3 initialSpinAngularVelocity = default(Vector3)
     )
     {
         transform.position = startPos; // Ensure ball starts at the correct position
@@ -394,7 +395,7 @@ public class CustomTennisBallRigidbody : MonoBehaviour
         isGrounded = false;
         hasBounced = false; // Reset bounce flag
         float initialSpeedMPS = velocity.magnitude;
-        Debug.Log($"Initial Shot Speed: {initialSpeedMPS:F2} m/s ({initialSpeedMPS * 3.6f:F2} km/h) + "+ velocity);
+        Debug.Log($"Initial Shot Speed: {initialSpeedMPS:F2} m/s ({initialSpeedMPS * 3.6f:F2} km/h) + " + velocity);
 
     }
 

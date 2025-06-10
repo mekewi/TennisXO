@@ -1,9 +1,18 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
+public struct TrajectoryPoint
+{
+    public Vector3 position;
+    public Vector3 velocity;
+    public float time;
+    public bool bounced;
+    internal Vector3 angularVelocity;
+}
 
 [RequireComponent(typeof(Rigidbody))] // Ensures a Rigidbody is always present
 [RequireComponent(typeof(SphereCollider))] // Ensures a SphereCollider is always present
-public class TennisBallLauncher : MonoBehaviour
+public class TennisBallLauncher : MonoBehaviour, ICustomTennisBallRigidbody
 {
     [Header("Physics Settings")]
     public float ballMass = 0.058f; // Standard tennis ball mass (kg)
@@ -18,7 +27,7 @@ public class TennisBallLauncher : MonoBehaviour
     public float spinForceMultiplier = 0.01f; // Adjust this to control the strength of Magnus effect
 
     // Private reference to Unity's Rigidbody
-    private Rigidbody rb;
+    public Rigidbody rb;
 
     // We'll still store initial velocity for trajectory calculations
     private Vector3 initialShotVelocity;
@@ -26,10 +35,19 @@ public class TennisBallLauncher : MonoBehaviour
     public event Action OnBounce;
     public event Action OnStop;
     public SwipeInput swipeInput; // Consider removing direct reference for better coupling
+    public PhysicsMaterial groundPhysicMaterial;
+    public PhysicsMaterial ballPhysicMaterialInstance; // Reference to the actual PhysicMaterial instance on the ball's collider
 
     private bool isMoving = false;
     private bool hasBounced = false;
-
+    bool debugHeight;
+    float oldYPosition;
+    public Action onReachHight;
+    Vector3 start;
+    public void Pause() 
+    {
+        rb.isKinematic = true;
+    }
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -76,6 +94,19 @@ public class TennisBallLauncher : MonoBehaviour
             ApplyMagnusForce();
 
             CheckStop();
+            if (debugHeight)
+            {
+                if (transform.position.y < oldYPosition)
+                {
+                    Debug.Log("Height = " + transform.position.y);
+                    Debug.Log("Height mag= " + (transform.position - start).magnitude);
+                    debugHeight = false;
+                    onReachHight?.Invoke();
+                    Pause();
+                    return;
+                }
+                oldYPosition = transform.position.y;
+            }
         }
     }
 
@@ -400,7 +431,229 @@ public class TennisBallLauncher : MonoBehaviour
         return velocityXZ + (Vector3.up * vy);
     }
 
+    // Inside your TennisBallLauncher.cs, perhaps in the ShootTo method,
+    // or a public method you call immediately after ShootTo.
+    // A more robust prediction method that can simulate bounces
+    public TrajectoryPoint[] PredictTrajectory(
+        Vector3 startPos,
+        Vector3 startVel,
+        Vector3 startAngularVel,
+        float predictionTime,
+        float timeStep = 0.02f
+    )
+    {
+        List<TrajectoryPoint> points = new List<TrajectoryPoint>();
 
+        Vector3 simPos = startPos;
+        Vector3 simVel = startVel;
+        Vector3 simAngularVel = startAngularVel;
+        float courtY = 0f; // Assuming your court ground is at Y = 0
+
+        // Get the ball's own material properties for prediction
+        float ballBounciness = ballPhysicMaterialInstance.bounciness;
+        float ballDynamicFriction = ballPhysicMaterialInstance.dynamicFriction;
+        PhysicsMaterialCombine ballBounceCombine = ballPhysicMaterialInstance.bounceCombine;
+        PhysicsMaterialCombine ballFrictionCombine = ballPhysicMaterialInstance.frictionCombine;
+
+        // Get ground material properties for prediction (use defaults if not assigned)
+        float groundBounciness = (groundPhysicMaterial != null) ? groundPhysicMaterial.bounciness : 1.0f; // Default to perfectly bouncy if no ground material
+        float groundDynamicFriction = (groundPhysicMaterial != null) ? groundPhysicMaterial.dynamicFriction : 1.0f; // Default to no friction
+        PhysicsMaterialCombine groundBounceCombine = (groundPhysicMaterial != null) ? groundPhysicMaterial.bounceCombine : PhysicsMaterialCombine.Average;
+        PhysicsMaterialCombine groundFrictionCombine = (groundPhysicMaterial != null) ? groundPhysicMaterial.frictionCombine : PhysicsMaterialCombine.Average;
+
+
+        // Calculate the EFFECTIVE combined properties for bounce based on Unity's rules.
+        // We'll take the 'combined' mode from the ball's material, as Unity tends to prioritize the more complex one,
+        // but for simplicity, we'll just implement the common 'Multiply' here directly for clarity.
+        // If you need other modes, you'd add more switch cases.
+
+        float effectiveBounciness = 1.0f;
+        float effectiveDynamicFriction = 1.0f;
+
+        // Simplify for common 'Multiply' case
+        // If you use other combine modes (Average, Min, Max), you'll need to implement those here too.
+        if (ballBounceCombine == PhysicsMaterialCombine.Multiply && groundBounceCombine == PhysicsMaterialCombine.Multiply)
+        {
+             effectiveBounciness = ballBounciness * groundBounciness;
+        }
+        else // Fallback for other modes or if they differ (often Average is used)
+        {
+            // You might need to decide which combine mode to prioritize if they differ
+            // For example, if one is Multiply and the other is Average, Unity has rules.
+            // A common simplified fallback is Average:
+            effectiveBounciness = (ballBounciness + groundBounciness) / 2f;
+        }
+
+
+        if (ballFrictionCombine == PhysicsMaterialCombine.Multiply && groundFrictionCombine == PhysicsMaterialCombine.Multiply)
+        {
+            effectiveDynamicFriction = ballDynamicFriction * groundDynamicFriction;
+        }
+        else
+        {
+            effectiveDynamicFriction = (ballDynamicFriction + groundDynamicFriction) / 2f;
+        }
+
+
+        // Clamp values to ensure they stay within reasonable physical bounds (0 to 1)
+        effectiveBounciness = Mathf.Clamp01(effectiveBounciness);
+        effectiveDynamicFriction = Mathf.Clamp01(effectiveDynamicFriction);
+
+
+        for (float t = 0f; t < predictionTime; t += timeStep)
+        {
+            Vector3 prevSimPos = simPos;
+
+            // Apply gravity
+            Vector3 acceleration = Physics.gravity;
+
+            // Apply drag (assuming linear drag model for simplicity)
+            acceleration -= simVel * dragCoefficient;
+
+            // Apply Magnus effect (simple approximation)
+            Vector3 magnusForce = Vector3.Cross(simAngularVel.normalized, simVel.normalized) * simAngularVel.magnitude * spinForceMultiplier;
+            acceleration += magnusForce / rb.mass; // Divide by mass to get acceleration
+
+            simVel += acceleration * timeStep;
+            simPos += simVel * timeStep;
+
+            bool bounced = false;
+            // Simplified ground collision detection (assuming flat ground at Y=0)
+            if (simPos.y < courtY + ballRadius && prevSimPos.y >= courtY + ballRadius)
+            {
+                simPos.y = courtY + ballRadius; // Correct position to avoid sinking
+                bounced = true;
+
+                // Calculate normal and tangential components of velocity for bounce
+                Vector3 normalVelocity = Vector3.Project(simVel, Vector3.up);
+                Vector3 tangentialVelocity = simVel - normalVelocity;
+
+                // Apply EFFECTIVE bounciness for normal velocity
+                normalVelocity *= -effectiveBounciness;
+
+                // Apply EFFECTIVE dynamic friction for tangential velocity
+                tangentialVelocity *= (1f - effectiveDynamicFriction);
+
+                simVel = normalVelocity + tangentialVelocity;
+
+                // Simple spin damping on bounce
+                simAngularVel *= 0.5f; // Dampen angular velocity (you might need a more complex model)
+            }
+
+            points.Add(new TrajectoryPoint
+            {
+                position = simPos,
+                velocity = simVel,
+                angularVelocity = simAngularVel,
+                bounced = bounced,
+                time = t
+            });
+        }
+        return points.ToArray();
+    }
+    public Vector3 DrawPreBounceTrajectoryAndTrackMaxHeight(
+    Vector3 startPos,
+    Vector3 startVel,
+    Vector3 startAngularVel,
+    float predictionTime,
+    float timeStep,
+    LineRenderer lineRendererToDraw)
+    {
+        var points = PredictTrajectory(startPos, startVel, startAngularVel, predictionTime, timeStep);
+
+        List<Vector3> preBouncePoints = new List<Vector3>();
+        bool foundBounce = false;
+        int bounceIndex = -1;
+
+        for (int i = 0; i < points.Length; i++)
+        {
+            var point = points[i];
+            preBouncePoints.Add(point.position);
+            if (point.bounced)
+            {
+                foundBounce = true;
+                bounceIndex = i;
+                break;
+            }
+        }
+
+        // Draw only the pre-bounce path
+        if (lineRendererToDraw != null)
+        {
+            lineRendererToDraw.positionCount = preBouncePoints.Count;
+            lineRendererToDraw.SetPositions(preBouncePoints.ToArray());
+        }
+
+        // Track max height after bounce
+        Vector3 maxHeightAfterBounce = new Vector3();
+
+        if (foundBounce && bounceIndex + 1 < points.Length)
+        {
+            for (int i = bounceIndex + 1; i < points.Length; i++)
+            {
+                Vector3 y = points[i].position;
+                if (y.y > maxHeightAfterBounce.y)
+                    maxHeightAfterBounce = y;
+
+                // Stop early if we passed the peak
+                if (points[i].velocity.y < 0 && points[i].position.y < points[bounceIndex].position.y)
+                    break;
+            }
+
+            Debug.Log($"Max height after first bounce: {maxHeightAfterBounce:F3} meters");
+            return maxHeightAfterBounce;
+        }
+
+        Debug.Log("No bounce detected or no post-bounce points.");
+        return Vector3.zero;
+    }
+
+    public TrajectoryPoint[] GetPredictedBounceVelocity(Vector3 startPos, Vector3 initialLaunchVelocity, Vector3 initialLaunchAngularVelocity)
+    {
+        // Predict the entire trajectory from the start of the shot
+        // Predict for a reasonable amount of time, e.g., 5 seconds, to ensure a bounce can be found.
+        // The timeStep should be small for accuracy.
+        float predictionTime = 5.0f; // Max time to simulate
+        float timeStep = 0.02f;     // Simulation step (matching FixedUpdate or smaller)
+
+        TrajectoryPoint[] predictedPath = PredictTrajectory(
+            startPos,
+            initialLaunchVelocity,
+            initialLaunchAngularVelocity,
+            predictionTime,
+            timeStep
+        );
+
+        // Iterate through the predicted points to find the first bounce
+        TrajectoryPoint? firstBouncePoint = null;
+        foreach (var point in predictedPath)
+        {
+            if (point.bounced)
+            {
+                firstBouncePoint = point;
+                break; // Found the first bounce, stop searching
+            }
+        }
+
+        if (firstBouncePoint.HasValue)
+        {
+            // Now you have the predicted velocity right after the first bounce!
+            Vector3 velocityAfterFirstBounce = firstBouncePoint.Value.velocity;
+            Vector3 positionAtFirstBounce = firstBouncePoint.Value.position;
+            float timeAtFirstBounce = firstBouncePoint.Value.time;
+
+            Debug.Log($"Predicted First Bounce at: {positionAtFirstBounce} (Time: {timeAtFirstBounce:F2}s)");
+            Debug.Log($"Predicted Velocity AFTER First Bounce: {velocityAfterFirstBounce}");
+
+            // You could return this value, store it, or use it immediately.
+            // For example, an AI could use this to anticipate future movement.
+        }
+        else
+        {
+            Debug.Log("No bounce predicted within the specified prediction time.");
+        }
+        return predictedPath;
+    }
     /// <summary>
     /// Shoots the ball towards a target using Unity's physics.
     /// </summary>
@@ -428,6 +681,9 @@ public class TennisBallLauncher : MonoBehaviour
         hasBounced = false; // Reset bounce flag
         float initialSpeedMPS = rb.linearVelocity.magnitude;
         Debug.Log($"Initial Shot Speed: {initialSpeedMPS:F2} m/s ({initialSpeedMPS * 3.6f:F2} km/h) | Initial Spin: {rb.angularVelocity.magnitude:F2} rad/s");
+        oldYPosition = transform.position.y;
+        start = transform.position;
+        //debugHeight = true;
     }
 
     // New: Handle collisions using Unity's OnCollisionEnter
@@ -446,6 +702,9 @@ public class TennisBallLauncher : MonoBehaviour
         {
             if (!hasBounced)
             {
+                oldYPosition = transform.position.y;
+                start = transform.position;
+                debugHeight = true;
                 hasBounced = true;
                 Debug.Log("Bounce (Ground) > " + (swipeInput != null ? (Time.time - swipeInput.startTime).ToString() : "N/A - SwipeInput not linked"));
                 OnBounce?.Invoke();
